@@ -135,16 +135,26 @@ void example5()
 	cout << "z3 : " << z3 << endl;
 }
 
-void* max(void* val1, void* val2, int(*compare)(void*, void*))
+const void* max(const void* val1, const void* val2, int(*compare)(const void*, const void*))
 {
 	return compare(val1, val2) >= 0 ? val1 : val2;
 }
 
 void example6()
 {
+	int (*cmp)(const void*, const void*)  = [](const void* v1, const void* v2) 
+	{
+		return *(const int *)v1 - *(const int *)v2;
+	};
 	int x = 3, y = 2;
-	int *z = (int *)max(&x, &y, [](void* val1, void* val2) {
-		return *(int*)val1 - *(int*)val2;
-	});
+	int *z = (int *)max(&x, &y, cmp);
 	cout << "*z: " << *z << endl;
+
+	const char *s1 = "s1";
+	const char *s2 = "s2";
+	const char *s = (const char *)max(s1, s2, [](const void *v1, const void *v2) 
+	{
+		return strcmp((const char*)v1, (const char*)v2);
+	});
+	cout << "s : " << s << endl;
 }
