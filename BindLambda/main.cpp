@@ -73,7 +73,7 @@ void example2()
 template <typename Fx>
 void start_routine_t(void* arg)
 {
-	Fx* func = (Fx*)arg;
+	Fx* func = static_cast<Fx*>(arg);
 	(*func)();
 }
 
