@@ -51,10 +51,9 @@ void sum_routine(void* arg)
 
 void example1()
 {
-	const size_t N = 3;
-	const int arr[N] = { 10, 20, 30 };
+	const int arr[] = { 10, 20, 30 };
 	int sum;
-	sum_args args = { arr, N, &sum };
+	sum_args args = { arr, sizeof(arr) / sizeof(*arr), &sum };
 	do_work(sum_routine, &args);
 	cout << "sum : " << sum << endl;
 }
@@ -79,12 +78,12 @@ void start_routine_t(void* arg)
 
 void example3()
 {
-	const size_t N = 3;
-	const int arr[N] = { 10, 20, 30 };
+	const int arr[] = { 10, 20, 30 };
 	int sum;
-	auto lambda = [=, &arr, &sum]() {
+	auto lambda = [&arr, &sum]() {
 		sum = 0;
-		for (size_t i = 0; i < N; ++i)
+		const size_t n = sizeof(arr) / sizeof(*arr);
+		for (size_t i = 0; i < n; ++i)
 			sum += arr[i];
 	};
 	do_work(start_routine_t<decltype(lambda)>, &lambda);
@@ -99,12 +98,12 @@ void do_work_t(Fx&& func)
 
 void example4()
 {
-	const size_t N = 3;
-	const int arr[N] = { 10, 20, 30 };
+	const int arr[] = { 10, 20, 30 };
 	int sum;
-	do_work_t([=, &arr, &sum]() {
+	do_work_t([&arr, &sum]() {
 		sum = 0;
-		for (size_t i = 0; i < N; ++i)
+		const size_t n = sizeof(arr) / sizeof(*arr);
+		for (size_t i = 0; i < n; ++i)
 			sum += arr[i];
 	});
 	cout << "sum : " << sum << endl;
