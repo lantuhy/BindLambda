@@ -1,6 +1,7 @@
 // Created on 2019/8/12.
 
 #include <iostream>
+#include <string>
 #include <functional>
 using namespace std;
 
@@ -19,7 +20,7 @@ int main()
 	};
 	for (size_t i = 0; i < sizeof(examples) / sizeof(*examples); ++i)
 	{
-		cout << "example " << i + 1 << endl;
+		cout << "-- example " << i + 1 << " --" << endl;
 		examples[i]();
 		cout << endl;
 	}
@@ -33,29 +34,29 @@ void do_work(void(*start_routine)(void*), void* arg)
 	cout << "end   work" << endl;
 }
 
-struct sum_args
+// 连接字符串s1和s2，结果存入s3
+struct string_join_args
 {
-	const int* arr;         // 数组
-	const size_t size;      // 数组元素个数
-	int* sum;               // 存放数组求和的结果
+	const char* s1;
+	const char* s2;
+	string& s3;      
 };
 
-// 计算数组所有元素之和
-void sum_routine(void* arg)
+void string_join_routine(void* arg)
 {
-	sum_args* args = (sum_args*)arg;
-	*(args->sum) = 0;
-	for (size_t i = 0; i < args->size; ++i)
-		* (args->sum) += args->arr[i];
+	string_join_args* args = (string_join_args*)arg;
+	args->s3 = args->s1;
+	args->s3 += args->s2;
 }
 
 void example1()
 {
-	const int arr[] = { 10, 20, 30 };
-	int sum;
-	sum_args args = { arr, sizeof(arr) / sizeof(*arr), &sum };
-	do_work(sum_routine, &args);
-	cout << "sum : " << sum << endl;
+	const char* s1 = "example1_s1_";
+	const char* s2 = "s2";
+	string s3;
+	string_join_args args = { s1, s2, s3 };
+	do_work(string_join_routine, &args);
+	cout << "s3 : " << s3 << endl;
 }
 
 void example2()
@@ -78,16 +79,15 @@ void start_routine_t(void* arg)
 
 void example3()
 {
-	const int arr[] = { 10, 20, 30 };
-	int sum;
-	auto lambda = [&arr, &sum]() {
-		sum = 0;
-		const size_t n = sizeof(arr) / sizeof(*arr);
-		for (size_t i = 0; i < n; ++i)
-			sum += arr[i];
+	const char* s1 = "example3_s1_";
+	const char* s2 = "s2";
+	string s3;
+	auto lambda = [=, &s3]() {
+		s3 = s1;
+		s3 += s2;
 	};
 	do_work(start_routine_t<decltype(lambda)>, &lambda);
-	cout << "sum : " << sum << endl;
+	cout << "s3: " << s3 << endl;
 }
 
 template <typename Fx>
@@ -98,15 +98,14 @@ void do_work_t(Fx&& func)
 
 void example4()
 {
-	const int arr[] = { 10, 20, 30 };
-	int sum;
-	do_work_t([&arr, &sum]() {
-		sum = 0;
-		const size_t n = sizeof(arr) / sizeof(*arr);
-		for (size_t i = 0; i < n; ++i)
-			sum += arr[i];
+	const char*	s1 = "example4_s1_";
+	const char* s2 = "s2";
+	string s3;
+	do_work_t([=, &s3]() {
+		s3 = s1;
+		s3 += s2;
 	});
-	cout << "sum : " << sum << endl;
+	cout << "s3 : " << s3 << endl;
 }
 
 void example5()
@@ -135,26 +134,36 @@ void example5()
 	cout << "z3 : " << z3 << endl;
 }
 
-const void* max(const void* val1, const void* val2, int(*compare)(const void*, const void*))
+// 根据比较函数compare找出字符串数组strings中最大的一个
+const char* max(const char** strings, size_t size,  int(*compare)(const char*, const char*))
 {
-	return compare(val1, val2) >= 0 ? val1 : val2;
+	if (strings == nullptr || size == 0)
+		return nullptr;
+	size_t idx = 0;
+	for(size_t i = 1; i < size; ++i)
+	{
+		if (compare(strings[i], strings[idx]) > 0)
+			idx = i;
+	}
+	return strings[idx];
 }
 
 void example6()
 {
-	int (*cmp)(const void*, const void*)  = [](const void* v1, const void* v2) 
+	int (*cmp)(const char*, const char*)  = [](const char* s1, const char* s2) 
 	{
-		return *(const int *)v1 - *(const int *)v2;
+		return strcmp(s1, s2);
 	};
-	int x = 3, y = 2;
-	int *z = (int *)max(&x, &y, cmp);
-	cout << "*z: " << *z << endl;
+	const size_t N = 3;
+	const char*	strings[] = { "2", "12", "112" };
+	const char*	max1 = max(strings, N, cmp);
+	cout << "max1 : " << max1 << endl;
 
-	const char *s1 = "s1";
-	const char *s2 = "s2";
-	const char *s = (const char *)max(s1, s2, [](const void *v1, const void *v2) 
+	const char* max2 = max(strings, N, [](const char* s1, const char* s2)
 	{
-		return strcmp((const char*)v1, (const char*)v2);
+		int i1 = atoi(s1);
+		int i2 = atoi(s2);
+		return i1 - i2;
 	});
-	cout << "s : " << s << endl;
+	cout << "max2 : " << max2 << endl;
 }
