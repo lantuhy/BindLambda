@@ -10,13 +10,16 @@ void example1();
 void example2();
 void example3();
 void example4();
+void example4();
 void example5();
 void example6();
+void example7();
+
 
 int main()
 {
 	void(*examples[])(void) = {
-		example1, example2, example3, example4, example5, example6,
+		example1, example2, example3, example4,  example5, example6, example7
 	};
 	for (size_t i = 0; i < sizeof(examples) / sizeof(*examples); ++i)
 	{
@@ -134,6 +137,7 @@ void example5()
 	cout << "z3 : " << z3 << endl;
 }
 
+
 // 根据比较函数compare找出字符串数组strings中最大的一个
 const char* max(const char** strings, size_t size,  int(*compare)(const char*, const char*))
 {
@@ -166,4 +170,59 @@ void example6()
 		return i1 - i2;
 	});
 	cout << "max2 : " << max2 << endl;
+}
+
+// 在堆上创建lambda的副本
+template <typename LambdaType>
+LambdaType* copy_lambda(LambdaType&& lambda)
+{
+	return new LambdaType(forward<LambdaType>(lambda));
+}
+
+// 返回lambda的地址
+template <typename LambdaType>
+LambdaType* get_lambda_pointer(LambdaType&& lambda)
+{
+	return &lambda;
+}
+
+class mystring
+{
+	char s[16];
+public:
+	mystring(const char *arg)
+	{
+		memcpy(s, arg, sizeof(s) - 1);
+		s[sizeof(s) - 1] = '\0';
+	}
+	mystring(const mystring& arg)
+	{
+		memcpy(s, arg.s, sizeof(s));
+	}
+	~mystring()
+	{
+		s[0] = '\0';
+	}
+	operator const char*() const
+	{
+		return s;
+	}
+};
+
+void example7()
+{
+	mystring s1("example7_s1");
+	auto lambda1 = copy_lambda([=]() {
+		cout << "s1 : " << (const char *)s1 << endl;
+	});
+	(*lambda1)();		//	输出"s1 : example7_s1"
+	delete lambda1;
+
+	mystring s2("example7_s2" );
+	auto lambda2 = get_lambda_pointer([=]() {
+		cout << "s2 : " << (const char *)s2 << endl;
+	});
+	char s3[] = "example7_s3";
+	// 危险！lambda2指向的对象已经销毁了！
+	(*lambda2)();		// 不会输出"s2 : example7_s2"
 }
