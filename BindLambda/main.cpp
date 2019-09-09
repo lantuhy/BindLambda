@@ -5,21 +5,21 @@
 #include <functional>
 using namespace std;
 
-void do_work(void(*start_routine)(void*), void* arg);
+void do_work(void (*work_routine)(void*), void* arg);
 void example1();
 void example2();
 void example3();
 void example4();
-void example4();
 void example5();
 void example6();
 void example7();
+void example8();
 
 
 int main()
 {
 	void(*examples[])(void) = {
-		example1, example2, example3, example4,  example5, example6, example7
+		example1, example2, example3, example4, example5, example6, example7, example8
 	};
 	for (size_t i = 0; i < sizeof(examples) / sizeof(*examples); ++i)
 	{
@@ -30,10 +30,10 @@ int main()
 	return 0;
 }
 
-void do_work(void(*start_routine)(void*), void* arg)
+void do_work(void (*work_routine)(void*), void* arg)
 {
 	cout << "begin work" << endl;
-	start_routine(arg);
+	work_routine(arg);
 	cout << "end   work" << endl;
 }
 
@@ -64,17 +64,18 @@ void example1()
 
 void example2()
 {
-	auto add = [](int x, int y) {
+	int x = 2;
+	auto lambda = [x](int y) {
 		return x + y;
 	};
-	void* pv = &add;                        // Lambda地址转换成void*
-	auto addptr = (decltype(&add))pv;       // void*转换成Lambda指针
-	int sum = (*addptr)(2, 3);              // 调用Lambda
-	cout << "sum : " << sum << endl;
+	void* pv = &lambda;										// Lambda指针转换成void*
+	auto lambdaptr = static_cast<decltype(&lambda)>(pv);    // void*转换成Lambda指针
+	int result = (*lambdaptr)(3);							// 调用Lambda
+	cout << "result : " << result << endl;
 }
 
 template <typename Fx>
-void start_routine_t(void* arg)
+void work_routine_version1(void* arg)
 {
 	Fx* func = static_cast<Fx*>(arg);
 	(*func)();
@@ -85,26 +86,26 @@ void example3()
 	const char* s1 = "example3_s1_";
 	const char* s2 = "s2";
 	string s3;
-	auto lambda = [=, &s3]() {
+	auto join = [=, &s3]() {
 		s3 = s1;
 		s3 += s2;
 	};
-	do_work(start_routine_t<decltype(lambda)>, &lambda);
+	do_work(work_routine_version1<decltype(join)>, &join);
 	cout << "s3: " << s3 << endl;
 }
 
 template <typename Fx>
-void do_work_t(Fx&& func)
+void do_work_t_version1(Fx&& func)
 {
-	do_work(start_routine_t<remove_reference_t<Fx>>, &func);
+	do_work(work_routine_version1<remove_reference_t<Fx>>, &func);
 }
 
 void example4()
 {
-	const char*	s1 = "example4_s1_";
+	const char* s1 = "example4_s1_";
 	const char* s2 = "s2";
 	string s3;
-	do_work_t([=, &s3]() {
+	do_work_t_version1([=, &s3]() {
 		s3 = s1;
 		s3 += s2;
 	});
@@ -116,27 +117,73 @@ void example5()
 	int x = 3, y = 2;
 
 	int z1;
-	do_work_t([=, &z1]() {
+	do_work_t_version1([=, &z1]() {
 		z1 = x + y;
 	});
-	cout << "z1 : " << z1 << endl;
+	cout << "add : " << z1 << endl;
 
 	int z2;
 	function<void(void)> sub = [=, &z2]() {
 		z2 = x - y;
 	};
-	do_work_t(sub);
-	cout << "z2 : " << z2 << endl;
+	do_work_t_version1(sub);
+	cout << "sub : " << z2 << endl;
 
 	int z3;
-	auto mul = [&z3](int a, int b) {
+	auto mul = bind([&z3](int a, int b) {
 		z3 = a * b;
-	};
-	auto binder = bind(mul, x, y);
-	do_work_t(binder);
-	cout << "z3 : " << z3 << endl;
+	}, x, y);
+	do_work_t_version1(mul);
+	cout << "mul : " << z3 << endl;
 }
 
+// 抽象类
+struct work
+{
+	virtual void operator()(void) = 0;
+};
+
+// 回调函数
+void work_routine_version2(void* arg)
+{
+	work* p = static_cast<work*>(arg);
+	p->operator()();
+}
+
+// Lambda适配器，适配work接口
+template <typename Fx>
+class work_t : public work
+{
+	decay_t<Fx> _functor;
+public:
+	work_t(Fx&& func) :
+		_functor(forward<Fx>(func))
+	{
+	}
+	virtual void operator()() override
+	{
+		return _functor();
+	}
+};
+
+template <typename Fx>
+void do_work_t_version2(Fx&& func)
+{
+	auto wrk = work_t<Fx>(forward<Fx>(func));
+	do_work(work_routine_version2, &wrk);
+}
+
+void example6()
+{
+	const char* s1 = "example6_s1_";
+	const char* s2 = "s2";
+	string s3;
+	do_work_t_version2([=, &s3]() {
+		s3 = s1;
+		s3 += s2;
+	});
+	cout << "s3 : " << s3 << endl;
+}
 
 // 根据比较函数compare找出字符串数组strings中最大的一个
 const char* max(const char** strings, size_t size,  int(*compare)(const char*, const char*))
@@ -152,15 +199,16 @@ const char* max(const char** strings, size_t size,  int(*compare)(const char*, c
 	return strings[idx];
 }
 
-void example6()
+void example7()
 {
-	int (*cmp)(const char*, const char*)  = [](const char* s1, const char* s2) 
+	const size_t N = 3;
+	const char* strings[] = { "2", "12", "112" };
+
+	int (*cmp)(const char*, const char*) = [](const char* s1, const char* s2) 
 	{
 		return strcmp(s1, s2);
 	};
-	const size_t N = 3;
-	const char*	strings[] = { "2", "12", "112" };
-	const char*	max1 = max(strings, N, cmp);
+	const char* max1 = max(strings, N, cmp);
 	cout << "max1 : " << max1 << endl;
 
 	const char* max2 = max(strings, N, [](const char* s1, const char* s2)
@@ -172,14 +220,14 @@ void example6()
 	cout << "max2 : " << max2 << endl;
 }
 
-// 在堆上创建lambda的副本
+// 在堆上创建Lambda的副本
 template <typename LambdaType>
 LambdaType* copy_lambda(LambdaType&& lambda)
 {
 	return new LambdaType(forward<LambdaType>(lambda));
 }
 
-// 返回lambda的地址
+// 返回Lambda的地址
 template <typename LambdaType>
 LambdaType* get_lambda_pointer(LambdaType&& lambda)
 {
@@ -188,41 +236,42 @@ LambdaType* get_lambda_pointer(LambdaType&& lambda)
 
 class mystring
 {
-	char s[16];
+	char str[16];
 public:
 	mystring(const char *arg)
 	{
-		memcpy(s, arg, sizeof(s) - 1);
-		s[sizeof(s) - 1] = '\0';
+		memcpy(str, arg, sizeof(str) - 1);
+		str[sizeof(str) - 1] = '\0';
 	}
 	mystring(const mystring& arg)
 	{
-		memcpy(s, arg.s, sizeof(s));
+		memcpy(str, arg.str, sizeof(str));
 	}
 	~mystring()
 	{
-		s[0] = '\0';
+		str[0] = '\0';
 	}
 	operator const char*() const
 	{
-		return s;
+		return str;
 	}
 };
 
-void example7()
+void example8()
 {
-	mystring s1("example7_s1");
+	mystring s1("example8_s1");
 	auto lambda1 = copy_lambda([=]() {
-		cout << "s1 : " << (const char *)s1 << endl;
+		cout << (const char *)s1 << endl;
 	});
-	(*lambda1)();		//	输出"s1 : example7_s1"
+	cout << "s1 : ";
+	(*lambda1)();		// 输出"example8_s1"
 	delete lambda1;
 
-	mystring s2("example7_s2" );
+	mystring s2("example8_s2" );
 	auto lambda2 = get_lambda_pointer([=]() {
-		cout << "s2 : " << (const char *)s2 << endl;
+		cout << (const char *)s2 << endl;
 	});
-	char s3[] = "example7_s3";
+	cout << "s2 : ";
 	// 危险！lambda2指向的对象已经销毁了！
-	(*lambda2)();		// 不会输出"s2 : example7_s2"
+	(*lambda2)();		// 不会输出"example8_s2"
 }
