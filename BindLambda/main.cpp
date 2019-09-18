@@ -2,10 +2,8 @@
 
 #include <iostream>
 #include <string>
-#include <functional>
 using namespace std;
 
-void do_work(void (*work_routine)(void*), void* arg);
 void example1();
 void example2();
 void example3();
@@ -14,7 +12,6 @@ void example5();
 void example6();
 void example7();
 void example8();
-
 
 int main()
 {
@@ -112,29 +109,31 @@ void example4()
 	cout << "s3 : " << s3 << endl;
 }
 
+
 void example5()
 {
 	int x = 3, y = 2;
-
-	int z1;
-	do_work_t_version1([=, &z1]() {
-		z1 = x + y;
+	do_work_t_version1([=]() {
+		cout << "x + y = " << x + y << endl;
 	});
-	cout << "add : " << z1 << endl;
+	do_work_t_version1([=]() {
+		cout << "x * y = " << x * y << endl;
+	});
 
-	int z2;
-	function<void(void)> sub = [=, &z2]() {
-		z2 = x - y;
+	struct string_operation
+	{
+		string& (string::*op)(const char*);
+		string& str;
+		const char* arg;
+		void operator()()
+		{
+			(str.*op)(arg);
+		}
 	};
-	do_work_t_version1(sub);
-	cout << "sub : " << z2 << endl;
-
-	int z3;
-	auto mul = bind([&z3](int a, int b) {
-		z3 = a * b;
-	}, x, y);
-	do_work_t_version1(mul);
-	cout << "mul : " << z3 << endl;
+	string s;
+	do_work_t_version1(string_operation{&string::assign, s, "example5_string_assign" });
+	do_work_t_version1(string_operation{&string::append, s, "_append" });
+	cout << "s : " << s << endl;
 }
 
 // 抽象类
@@ -150,7 +149,7 @@ void work_routine_version2(void* arg)
 	p->operator()();
 }
 
-// Lambda适配器，适配work接口
+// Lambda包装器，实现work接口
 template <typename Fx>
 class work_t : public work
 {
